@@ -13,6 +13,7 @@ body {
     background: #6666ff;
     margin-bottom: 20px;
     padding: 10px;
+    color: #fff;
 }
 
 .chat-container {
@@ -62,6 +63,7 @@ button:hover {
 .disconnect-btn{
     margin-top: 20px;
     background: #ff4d4d;
+    margin-left: 0;
 }
 
 .disconnect-btn:hover{

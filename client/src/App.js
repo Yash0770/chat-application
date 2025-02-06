@@ -52,6 +52,12 @@ function App() {
     setIsConnected(false);
   };
 
+  const connect = ()=>{
+    socket.emit('user connected', `${username}`);
+    socket.connect()
+    setIsConnected(true)
+  }
+
   return (
     <div className="chat-container">
       <div className='heading'>Chat Application</div>
@@ -76,7 +82,8 @@ function App() {
           </button>
         </>
       ) : (
-        <p>You have disconnected from the chat.</p>
+        // <p>You have disconnected from the chat.</p>
+        <button onClick={connect}>Connect</button>
       )}
     </div>
   );
