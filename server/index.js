@@ -7,16 +7,16 @@ const app = express();
 const server = http.createServer(app);
 
 app.use(cors({
-  origin: 'http://localhost:3000',
-  methods: ['GET', 'POST'],
-  credentials: true,
+  // origin: 'http://localhost:3000',
+  // methods: ['GET', 'POST'],
+  // credentials: true,
 }));
 
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:3000',
-    methods: ['GET', 'POST'],
-    credentials: true,
+    // origin: 'http://localhost:3000',
+    // methods: ['GET', 'POST'],
+    // credentials: true,
   },
 });
 
@@ -42,5 +42,5 @@ io.on('connection', (socket) => {
 });
 
 server.listen(3001, () => {
-  console.log('Listening on *:3001');
+  console.log('Server is running on :3001');
 });

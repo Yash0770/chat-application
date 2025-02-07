@@ -10,6 +10,7 @@ function App() {
   const [username, setUsername] = useState('');
   const [isConnected, setIsConnected] = useState(true);
   const usernameSet = useRef(false);
+  const messagesEndRef = useRef(null)
 
   useEffect(() => {
     if (!usernameSet.current) {
@@ -38,6 +39,10 @@ function App() {
     };
   }, []);
 
+  useEffect(()=>{
+    messagesEndRef.current?.scrollIntoView({behavior: 'smooth'})
+  },[messages])
+
   const sendMessage = (e) => {
     e.preventDefault();
     if (message) {
@@ -65,6 +70,7 @@ function App() {
         {messages.map((msg, index) => (
           <li key={index}>{msg}</li>
         ))}
+        <div ref={messagesEndRef} />
       </ul>
       {isConnected ? (
         <>

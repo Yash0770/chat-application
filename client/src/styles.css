@@ -9,11 +9,13 @@ body {
     height: 100vh;
 }
 
-.heading{
+.heading {
     background: #6666ff;
     margin-bottom: 20px;
     padding: 10px;
     color: #fff;
+    text-align: center;
+    font-size: 18px;
 }
 
 .chat-container {
@@ -22,21 +24,38 @@ body {
     border-radius: 8px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     width: 300px;
+    display: flex;
+    flex-direction: column;
 }
 
 #messages {
     list-style-type: none;
     margin: 0;
-    padding: 0;
-    height: 200px;
-    overflow-y: scroll;
-    border: 1px solid #ccc;
     padding: 10px;
+    height: 200px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
     margin-bottom: 10px;
+    word-wrap: break-word; 
+    overflow-wrap: break-word; 
+    display: flex;
+    flex-direction: column;
+}
+
+#messages li {
+    background: #f1f1f1;
+    padding: 8px;
+    border-radius: 5px;
+    margin-bottom: 5px;
+    max-width: 100%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: normal; 
 }
 
 #form {
     display: flex;
+    gap: 10px;
 }
 
 #input {
@@ -52,7 +71,6 @@ button {
     color: #fff;
     border: none;
     border-radius: 4px;
-    margin-left: 10px;
     cursor: pointer;
 }
 
@@ -60,12 +78,11 @@ button:hover {
     background: #218838;
 }
 
-.disconnect-btn{
-    margin-top: 20px;
+.disconnect-btn {
+    margin-top: 10px;
     background: #ff4d4d;
-    margin-left: 0;
 }
 
-.disconnect-btn:hover{
+.disconnect-btn:hover {
     background: #ff3333;
 }
