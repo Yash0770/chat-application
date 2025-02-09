@@ -1,9 +1,9 @@
-import express from 'express'
+import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 
-const router = express.Router()
+const router = express.Router();
 
 // SignUp
 router.post('/signup', async (req, res) => {
@@ -29,59 +29,82 @@ router.post('/login', async (req, res) => {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
-        // Generate a short-lived access token
         const accessToken = jwt.sign({ username }, process.env.JWT_SECRET, { expiresIn: '1m' });
 
-        // Check if user already has a refresh token stored (you need to store it in DB)
+        // Always use the existing refresh token if it exists
         let refreshToken = user.refreshToken;
         if (!refreshToken) {
             refreshToken = jwt.sign({ username }, process.env.JWT_SECRET, { expiresIn: '1d' });
-            user.refreshToken = refreshToken;  // Store refresh token in DB
-            await user.save();  // Save the updated user
+            user.refreshToken = refreshToken;
+            await user.save(); // Save refresh token only once
         }
 
         // Set cookies
         res.cookie('accessToken', accessToken, { httpOnly: true, sameSite: 'strict' });
         res.cookie('refreshToken', refreshToken, { httpOnly: true, sameSite: 'strict' });
 
-        res.json({ message: 'Login successful', accessToken, username, refreshToken });
+        // 🔹 **Include refreshToken in response**
+        res.json({ message: 'Login successful', accessToken, refreshToken, username });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error while login' });
     }
 });
 
-// Token Refresh
+
+// Refresh Token
 router.post('/refresh-token', async (req, res) => {
-    const { refreshToken } = req.cookies;
-
-    if (!refreshToken) return res.status(401).json({ message: 'Unauthorized' });
-
     try {
-        // Verify refresh token
-        const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
-        const user = await User.findOne({ username: decoded.username });
-
-        if (!user || user.refreshToken !== refreshToken) {
-            return res.status(403).json({ message: 'Invalid refresh token' });
+        const { refreshToken } = req.body;  // Extract from request body
+        if (!refreshToken) {
+            return res.status(401).json({ message: 'Refresh Token required' });
         }
 
-        // Generate a new access token
-        const newAccessToken = jwt.sign({ username: user.username }, process.env.JWT_SECRET, { expiresIn: '1m' });
+        // Verify Refresh Token
+        jwt.verify(refreshToken, process.env.JWT_SECRET, async (err, decoded) => {
+            if (err) {
+                return res.status(403).json({ message: 'Invalid refresh token' });
+            }
 
-        res.cookie('accessToken', newAccessToken, { httpOnly: true, sameSite: 'strict' });
-        res.json({ accessToken: newAccessToken });
+            // Check if token exists in DB
+            const user = await User.findOne({ username: decoded.username, refreshToken });
+            if (!user) {
+                return res.status(403).json({ message: 'Refresh token not found' });
+            }
+
+            // Generate new access token
+            const newAccessToken = jwt.sign(
+                { username: user.username },
+                process.env.JWT_SECRET,
+                { expiresIn: '1m' } // 1 minute expiry for testing
+            );
+
+            res.json({ accessToken: newAccessToken });
+        });
+
     } catch (error) {
-        res.status(403).json({ message: 'Invalid refresh token' });
+        console.error(error);
+        res.status(500).json({ message: 'Server error during token refresh' });
     }
 });
 
 
 // Logout
 router.post('/logout', async (req, res) => {
-    res.clearCookie('accessToken');
-    res.clearCookie('refreshToken');
-    res.json({ message: 'Logged out' });
+    try {
+        const { refreshToken } = req.cookies;
+        if (!refreshToken) return res.status(400).json({ message: 'No refresh token found' });
+
+        const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+        await User.findOneAndUpdate({ username: decoded.username }, { refreshToken: null });
+
+        res.clearCookie('accessToken');
+        res.clearCookie('refreshToken');
+        res.json({ message: 'Logged out' });
+    } catch (error) {
+        console.error('Logout error:', error);
+        res.status(500).json({ message: 'Error logging out' });
+    }
 });
 
 export default router;

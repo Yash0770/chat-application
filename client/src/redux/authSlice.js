@@ -1,110 +1,137 @@
-import { createSlice } from '@reduxjs/toolkit';
-
-const initialState = {
-    user: null,
-    token: null // Stores accessToken
-}
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 
 const authSlice = createSlice({
-  name: 'auth',
-  initialState,
+  name: "auth",
+  initialState: {
+    user: null,
+    token: null,
+    refreshToken: null,
+    loading: false,
+    error: null,
+  },
   reducers: {
-    login: (state, action) => {
-      const { username: user, accessToken: token, refreshToken } = action.payload;
-      console.log('refreshToken',refreshToken);
-      
-      
-      if (user && token) {
-        state.user = user;
-        state.token = token;
-        localStorage.setItem('token', token);
-      } else {
-        console.error('Invalid login data', action.payload);
-      }
-    },
-    
     logout: (state) => {
       state.user = null;
       state.token = null;
-      localStorage.removeItem('token');
+      state.refreshToken = null;
+      localStorage.removeItem("token");
+      localStorage.removeItem("refreshToken");
     },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(loginAsync.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(loginAsync.fulfilled, (state, action) => {
+        const { username, accessToken, refreshToken } = action.payload;
+        state.user = username;
+        state.token = accessToken;
+        state.refreshToken = refreshToken;
+        state.loading = false;
 
-    refreshAccessToken: (state, action) => {
-      state.token = action.payload.accessToken;  // Update the token in Redux
-      localStorage.setItem('token', action.payload.accessToken);
-    }
+        localStorage.setItem("token", accessToken);
+        localStorage.setItem("refreshToken", refreshToken);
+      })
+      .addCase(loginAsync.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(refreshTokenAsync.fulfilled, (state, action) => {
+        state.token = action.payload; // Update token from refresh
+        localStorage.setItem("token", action.payload);
+      })
+      .addCase(refreshTokenAsync.rejected, (state) => {
+        state.token = null;
+        state.refreshToken = null;
+        localStorage.removeItem("token");
+        localStorage.removeItem("refreshToken");
+      });
   },
 });
 
-export const { login, logout, refreshAccessToken } = authSlice.actions;
+export const refreshTokenAsync = createAsyncThunk(
+  "auth/refreshTokenAsync",
+  async (_, { rejectWithValue }) => {
+    try {
+      const refreshToken = localStorage.getItem("refreshToken");
+      if (!refreshToken) {
+        console.error("No refresh token available");
+        throw new Error("No refresh token available");
+      }
 
-// Async action creator
-export const refreshTokenAsync = () => async (dispatch) => {
-  try {
-    const response = await fetch('http://localhost:3001/api/auth/refresh-token', {
-      method: 'POST',
-      credentials: 'include',  // Important: Send cookies for refreshToken
-    });
+      const response = await fetch(
+        "http://localhost:3001/api/auth/refresh-token",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include", // Send cookies (if applicable)
+          body: JSON.stringify({ refreshToken }), // Send refresh token explicitly
+        }
+      );
 
-    if (!response.ok) {
-      throw new Error('Failed to refresh token');
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Refresh token error:", errorData);
+        throw new Error(errorData.message || "Failed to refresh token");
+      }
+
+      const data = await response.json();
+
+      return data.accessToken; // Return the new access token
+    } catch (error) {
+      return rejectWithValue(error.message);
     }
-
-    const data = await response.json();
-    console.log('New Access Token:', data.accessToken);
-
-    dispatch(refreshAccessToken(data));  // Update Redux state
-    return data.accessToken; // Return new token
-  } catch (error) {
-    console.error('Error refreshing token:', error);
-    dispatch(logout());  // If refresh fails, log the user out
   }
-};
+);
 
-export const loginAsync = (credentials) => async (dispatch) => {
-  try {
-    const response = await fetch('http://localhost:3001/api/auth/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(credentials),
-      credentials: 'include',
-    });
+export const loginAsync = createAsyncThunk(
+  "auth/loginAsync",
+  async (credentials, { rejectWithValue }) => {
+    try {
+      const response = await fetch("http://localhost:3001/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(credentials),
+        credentials: "include", // Send cookies (if applicable)
+      });
 
-    const data = await response.json();    
+      const data = await response.json();
+      if (!response.ok) {
+        return rejectWithValue(data.message || "Login failed");
+      }
 
-    if (response.ok) {
-      dispatch(login(data)); // Save accessToken in Redu
-      return data; // Return the data to resolve the promise
-    } else {
-      throw new Error(data.message || 'Login failed');
+      return data; // { username, accessToken, refreshToken }
+    } catch (error) {
+      return rejectWithValue(error.message);
     }
-  } catch (error) {
-    console.error('Error:', error);
-    throw error; // Re-throw the error to trigger .catch()
   }
-};
+);
 
 export const fetchWithAuth = async (url, options, dispatch) => {
-  const token = localStorage.getItem('token');
+  let token = localStorage.getItem("token");
 
   if (!options.headers) options.headers = {};
-  options.headers['Authorization'] = `Bearer ${token}`;
+  options.headers["Authorization"] = `Bearer ${token}`;
 
   let response = await fetch(url, options);
 
   if (response.status === 401) {
-    console.warn('Access token expired, trying to refresh...');
+    // Token expired
+    console.warn("Access token expired, trying to refresh...");
 
-    // Refresh the token
-    const newToken = await dispatch(refreshTokenAsync());
+    const newToken = await dispatch(refreshTokenAsync()).unwrap(); // 🔹 Use unwrap() to wait for new token
 
     if (newToken) {
-      options.headers['Authorization'] = `Bearer ${newToken}`;
-      response = await fetch(url, options);  // Retry the request
+      options.headers["Authorization"] = `Bearer ${newToken}`;
+      response = await fetch(url, options); // Retry request
     } else {
-      console.error('Failed to refresh token, logging out');
+      console.error("Failed to refresh token, logging out");
       dispatch(logout());
     }
   }
@@ -112,5 +139,7 @@ export const fetchWithAuth = async (url, options, dispatch) => {
   return response.json();
 };
 
-
+export const { logout } = authSlice.actions;
+// export { loginAsync, refreshTokenAsync }; // Export async thunks
 export default authSlice.reducer;
+// export default authSlice.reducer;

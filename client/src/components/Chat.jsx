@@ -1,67 +1,51 @@
-import React, { useState, useEffect, useRef } from 'react';
-import io from 'socket.io-client';
-import { useSelector, useDispatch } from 'react-redux';
-import { logout, fetchWithAuth } from '../redux/authSlice';
-import { useNavigate } from 'react-router-dom';
-import LogoutDropdown from './LogoutDropdown';
-import '../styles.css';
+import React, { useState, useEffect, useRef } from "react";
+import io from "socket.io-client";
+import { useSelector, useDispatch } from "react-redux";
+import { logout, fetchWithAuth } from "../redux/authSlice";
+import { useNavigate } from "react-router-dom";
+import LogoutDropdown from "./LogoutDropdown";
+import "../styles.css";
 
-const socket = io('http://localhost:3001', {
+const socket = io("http://localhost:3001", {
   autoConnect: false, // Prevent auto-connecting on load
 });
 
 function Chat() {
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
   const messagesEndRef = useRef(null);
-
   const user = useSelector((state) => state.auth.user);
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!user) {
-      navigate('/login');
+      navigate("/login");
       return;
     }
 
-    socket.connect();
-    setIsConnected(true);
-
-    // Emit user connection
-    socket.emit('user connected', user.username);
-
-    socket.on('chat message', (msg) => {
-      setMessages((prevMessages) => [...prevMessages, msg]);
-    });
-
-    socket.on('user connected', (msg) => {
-      setMessages((prevMessages) => [...prevMessages, msg]);
-    });
-
-    socket.on('user disconnected', (msg) => {
-      setMessages((prevMessages) => [...prevMessages, msg]);
-    });
-
     return () => {
       socket.disconnect();
-      setIsConnected(false);
     };
   }, [user, navigate]);
 
   useEffect(() => {
     const fetchMessages = async () => {
       try {
-        const data = await fetchWithAuth('http://localhost:3001/api/chat/messages', {
-          method: 'GET',
-        }, dispatch);
+        const data = await fetchWithAuth(
+          "http://localhost:3001/api/chat/messages",
+          {
+            method: "GET",
+          },
+          dispatch
+        );
 
         if (Array.isArray(data)) {
-          setMessages((prevMessages) => [...prevMessages, ...data]); // Append messages, don't replace
+          setMessages(data);
         }
       } catch (error) {
-        console.error('Error fetching messages:', error);
+        console.error("Error fetching messages:", error);
       }
     };
 
@@ -69,34 +53,56 @@ function Chat() {
   }, [dispatch]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const sendMessage = (e) => {
     e.preventDefault();
-    if (message.trim()) {
-      socket.emit('chat message', `${user.username}: ${message}`);
-      setMessage('');
+    if (message.trim() && isConnected) {
+      socket.emit("chat message", `${user}: ${message}`);
+      setMessage("");
+    }
+  };
+
+  const connectUser = () => {
+    if (!isConnected) {
+      socket.connect();
+      socket.emit("user connected", user);
+      setIsConnected(true);
+
+      socket.on("chat message", (msg) => {
+        setMessages((prevMessages) => [...prevMessages, msg]);
+      });
+
+      socket.on("user connected", (msg) => {
+        setMessages((prevMessages) => [...prevMessages, msg]);
+      });
+
+      socket.on("user disconnected", (msg) => {
+        setMessages((prevMessages) => [...prevMessages, msg]);
+      });
     }
   };
 
   const disconnectUser = () => {
-    socket.emit('user disconnected', `${user.username} has left the chat`);
-    socket.disconnect();
-    setIsConnected(false);
+    if (isConnected) {
+      socket.emit("user disconnected", `${user} has left the chat`);
+      socket.disconnect();
+      setIsConnected(false);
+    }
   };
 
-  const connectUser = () => {
-    socket.connect();
-    socket.emit('user connected', `${user.username}`);
-    setIsConnected(true);
+  const handleLogout = () => {
+    disconnectUser();
+    dispatch(logout());
+    navigate("/login");
   };
 
   return (
     <div className="chat-container">
       <div className="chat-header">
         <div className="heading">Chat Application</div>
-        <LogoutDropdown onLogout={() => dispatch(logout())} />
+        <LogoutDropdown onLogout={handleLogout} />
       </div>
 
       <ul id="messages">
@@ -122,7 +128,9 @@ function Chat() {
           </button>
         </>
       ) : (
-        <button onClick={connectUser}>Connect</button>
+        <button onClick={connectUser} className="connect-btn">
+          Connect
+        </button>
       )}
     </div>
   );
